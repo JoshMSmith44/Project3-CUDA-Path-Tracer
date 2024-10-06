@@ -16,6 +16,7 @@
 #include "utilities.h"
 #include "intersections.h"
 #include "interactions.h"
+#include "obj_utils.h"
 
 #define ERRORCHECK 1
 
@@ -26,6 +27,10 @@
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
+
+#define OCTREESEARCH 1
+#define APPROXOCTREELEAFSIZE 10
+
 void checkCUDAErrorFn(const char* msg, const char* file, int line)
 {
 #if ERRORCHECK
@@ -87,6 +92,9 @@ static Geom* dev_geoms = NULL;
 static Material* dev_materials = NULL;
 static PathSegment* dev_paths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
+static Tri* dev_triangle_set = NULL;
+static OctTreeRegion* dev_octRegions = NULL;
+static int numOctRegions = 0;
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
 
@@ -118,6 +126,38 @@ void pathtraceInit(Scene* scene)
 
     // TODO: initialize any extra device memeory you need
 
+    //initialized triangle set for mesh rendering
+    int num_triangles = scene->triangles.size();
+    cudaMalloc(&dev_triangle_set, num_triangles * sizeof(Tri));
+    cudaMemcpy(dev_triangle_set, scene->triangles.data(), scene->triangles.size() * sizeof(Tri), cudaMemcpyHostToDevice);
+
+    #if OCTREESEARCH == 1
+    cout << "sizeof triangle set: num, tot_size: " << num_triangles << num_triangles * sizeof(Tri) << endl;
+    float numleafrough = ((float)(num_triangles)) / APPROXOCTREELEAFSIZE;
+    int tree_depth = floor((int)(log2(numleafrough) / 3.0f));
+    if(tree_depth < 0){
+        tree_depth = 0;
+    }
+    int tree_size = ((1 << 3 * (tree_depth + 1)) - 1) / 7;
+    numOctRegions = tree_size;
+    OctTreeRegion* octRegions = new OctTreeRegion[tree_size];
+    std::cout << "before octree tri array, with tree depth: " << tree_depth << " and tree size " << tree_size << endl;
+    cudaDeviceSynchronize();
+    //formOctreeTrianglesArray(dev_triangle_set, num_triangles, octRegions, tree_size, 0, tree_depth, 0, 1, 0);
+    formOctreeTrianglesArray(dev_triangle_set, num_triangles, octRegions, 0, tree_depth, 0, 0);
+    cudaMalloc(&dev_octRegions, tree_size * sizeof(OctTreeRegion));
+    cudaMemcpy(dev_octRegions, octRegions, tree_size * sizeof(OctTreeRegion), cudaMemcpyHostToDevice);
+    for(int i = 0; i < tree_size; i++){
+        OctTreeRegion region = octRegions[i];
+        Geom bbox = region.boundingBox;
+        std::cout << "oct region " << i << endl;
+        std::cout << "    scale: " << bbox.scale.x << " " << bbox.scale.y << " " <<  bbox.scale.z << endl;
+        std::cout << "    trans: " << bbox.translation.x << " " << bbox.translation.y << " " <<  bbox.translation.z << endl;
+        std::cout << "    depth: " << region.depth << endl;
+        std::cout << "    length: " << region.length << endl;
+    }
+    #endif
+
     checkCUDAError("pathtraceInit");
 }
 
@@ -130,6 +170,8 @@ void pathtraceFree()
     cudaFree(dev_intersections);
     // TODO: clean up any extra device memory you created
 
+    cudaFree(dev_triangle_set);
+    cudaFree(dev_octRegions);
     checkCUDAError("pathtraceFree");
 }
 
@@ -186,7 +228,11 @@ __global__ void computeIntersections(
     PathSegment* pathSegments,
     Geom* geoms,
     int geoms_size,
-    ShadeableIntersection* intersections)
+    ShadeableIntersection* intersections,
+    Tri* triangle_set,
+    int num_triangles,
+    OctTreeRegion* octRegions,
+    int num_octs)
 {
     int path_index = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -231,16 +277,25 @@ __global__ void computeIntersections(
             }
         }
 
-        if (hit_geom_index == -1)
-        {
-            intersections[path_index].t = -1.0f;
-        }
-        else
-        {
+        //naive parse through mesh
+        #if OCTREESEARCH == 1
+        FloatInt mesh_intersect = getTriIntersectionOctTree(pathSegment.ray, triangle_set, num_triangles, octRegions, num_octs,t_min);
+        #else
+        FloatInt mesh_intersect = getTriIntersectionLinear(pathSegment.ray, triangle_set, num_triangles,t_min);
+        #endif
+        if(mesh_intersect.i != -1){
+            intersections[path_index].t = mesh_intersect.f;
+            intersections[path_index].materialId = -1;
+            intersections[path_index].triangleId = mesh_intersect.i;
+            intersections[path_index].surfaceNormal = triangle_set[mesh_intersect.i].normal;
+        } else if (hit_geom_index != -1){
             // The ray hits something
             intersections[path_index].t = t_min;
             intersections[path_index].materialId = geoms[hit_geom_index].materialid;
             intersections[path_index].surfaceNormal = normal;
+            intersections[path_index].triangleId = -1;
+        } else {
+            intersections[path_index].t = -1.0f;
         }
     }
 }
@@ -249,7 +304,8 @@ __global__ void shadeBSDFMaterial(
     int num_paths,
     ShadeableIntersection* shadeableIntersections,
     PathSegment* pathSegments,
-    Material* materials)
+    Material* materials,
+    Tri* triangles)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < num_paths)
@@ -263,7 +319,15 @@ __global__ void shadeBSDFMaterial(
             // makeSeededRandomEngine as well.
             thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, pathSegments[idx].remainingBounces);
 
-            Material material = materials[intersection.materialId];
+            Material material; 
+            if(intersection.triangleId != -1){
+                Tri tri = triangles[intersection.triangleId];
+                material.color = tri.color;
+                material.emittance = tri.emittance;
+                material.hasReflective = tri.reflectivity;
+            } else {
+                material = materials[intersection.materialId];
+            }
             glm::vec3 materialColor = material.color;
 
             // If the material indicates that the object was a light, "light" the ray
@@ -274,15 +338,12 @@ __global__ void shadeBSDFMaterial(
             } else {
 
                 glm::vec3 intersectOrigin = pathSegments[idx].ray.origin + intersection.t * pathSegments[idx].ray.direction;
-                intersectOrigin += intersection.surfaceNormal * 0.0001f;
+                intersectOrigin += intersection.surfaceNormal * 0.00001f;
                 scatterRay(pathSegments[idx], intersectOrigin, intersection.surfaceNormal, material, rng);
                 pathSegments[idx].remainingBounces -= 1;
                 //Reflective
                 //pathSegments[idx].ray.direction -= 2.0f * intersection.surfaceNormal * glm::dot(pathSegments[idx].ray.direction, intersection.surfaceNormal);
 
-                //old
-                //pathSegments[idx].color *= (materialColor * lightTerm) * 0.3f + ((1.0f - intersection.t * 0.02f) * materialColor) * 0.7f;
-                //pathSegments[idx].color *= u01(rng); // apply some noise because why not
                 if (pathSegments[idx].remainingBounces == 0){
                     pathSegments[idx].color = glm::vec3(0.0f);
                 }
@@ -459,6 +520,7 @@ void pathtrace(uchar4* pbo, int frame, int iter)
     // --- PathSegment Tracing Stage ---
     // Shoot ray into scene, bounce between objects, push shading chunks
 
+    int num_triangles = hst_scene->triangles.size();
     bool iterationComplete = false;
     while (!iterationComplete)
     {
@@ -469,12 +531,17 @@ void pathtrace(uchar4* pbo, int frame, int iter)
         // tracing
         dim3 numblocksPathSegmentTracing = (num_paths_remaining + blockSize1d - 1) / blockSize1d;
         computeIntersections<<<numblocksPathSegmentTracing, blockSize1d>>> (
+        //computeIntersections<<<1, 1>>> (
             depth,
             num_paths_remaining,
             dev_paths,
             dev_geoms,
             hst_scene->geoms.size(),
-            dev_intersections
+            dev_intersections,
+            dev_triangle_set,
+            num_triangles,
+            dev_octRegions,
+            numOctRegions
         );
         cudaDeviceSynchronize();
         checkCUDAError("intersection check");
@@ -499,14 +566,15 @@ void pathtrace(uchar4* pbo, int frame, int iter)
             num_paths_remaining,
             dev_intersections,
             dev_paths,
-            dev_materials
+            dev_materials,
+            dev_triangle_set
         );
         cudaDeviceSynchronize();
 
         //Stream Compation with thrust::remove_if
         num_paths_remaining = thrust::partition(dev_paths_device_ptr, dev_paths_device_ptr + num_paths_remaining, my_predicate()) - dev_paths_device_ptr; 
-        std::cout << "num paths remaining: " << num_paths_remaining << endl;
-        std::cout << "num paths " << num_paths << endl;
+        //std::cout << "num paths remaining: " << num_paths_remaining << endl;
+        //std::cout << "num paths " << num_paths << endl;
         cudaDeviceSynchronize();
 
         iterationComplete = num_paths_remaining == 0; 
@@ -519,7 +587,6 @@ void pathtrace(uchar4* pbo, int frame, int iter)
 
     // Assemble this iteration and apply it to the image
     dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
-    std::cout << "final num paths " << num_paths << endl;
     finalGather<<<numBlocksPixels, blockSize1d>>>(num_paths, dev_image, dev_paths);
     checkCUDAError("check");
 

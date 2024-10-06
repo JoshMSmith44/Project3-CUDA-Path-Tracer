@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include "json.hpp"
 #include "scene.h"
+#include "obj_utils.h"
 using json = nlohmann::json;
 
 Scene::Scene(string filename)
@@ -82,6 +83,19 @@ void Scene::loadFromJSON(const std::string& jsonName)
         newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
 
         geoms.push_back(newGeom);
+    }
+    const auto& objsData = data["OBJs"];
+
+    triangles = std::vector<Tri>();
+    for (const auto& p : objsData){
+
+        std::vector<Tri> tris;
+        const auto& scaleData = p["SCALE"];
+        const auto& transData = p["TRANS"];
+        glm::vec3 scale = glm::vec3(scaleData[0], scaleData[1], scaleData[2]);
+        glm::vec3 trans = glm::vec3(transData[0], transData[1], transData[2]);
+        readOBJ(p["fn"], tris, scale, trans);
+        triangles.insert(triangles.end(), tris.begin(), tris.end());
     }
     const auto& cameraData = data["Camera"];
     Camera& camera = state.camera;
