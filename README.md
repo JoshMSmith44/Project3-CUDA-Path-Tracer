@@ -3,11 +3,25 @@ CUDA Path Tracer
 
 **University of Pennsylvania, CIS 565: GPU Programming and Architecture, Project 3**
 
-* (TODO) YOUR NAME HERE
-* Tested on: (TODO) Windows 22, i7-2222 @ 2.22GHz 22GB, GTX 222 222MB (Moore 2222 Lab)
+* Joshua Smith
+  * [LinkedIn](https://www.linkedin.com/in/joshua-smith-32b165158/)
+* Tested on: Ubuntu 20.04, Ryzen 9 3900x @ 4.6GHz, 24GB RTX 4090 (Personal)
 
-### (TODO: Your README)
+----
+### README
+![alt text](img/teddy.png)
+**Project Description**
 
-*DO NOT* leave the README to the last minute! It is a crucial part of the
-project, and we will not be able to grade you without a good README.
+In this project, I created a CUDA pathtracer to render 3D scenes. This includes toggleable material sorting. I incorporated some cool features I am especially proud of. Specifically, lottery termination, support for obj meshes, and an Octree based sample for mesh intersections.
+
+In my tests so far, the Octree sampling doubled the frame rate on meshes of about 3k triangles.
+
+Working on more in-depth analysis and readme. This is just the code submission.
+
+**Items Completed**:
+  * Standard Impl
+  * Octree mesh sampling
+  * Obj mesh support
+  * Lottery Termination
+----
 

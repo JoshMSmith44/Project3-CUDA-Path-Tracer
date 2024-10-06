@@ -12,7 +12,7 @@
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 #include <thrust/sort.h>
-#define BBOX_EPS 0.00001f
+#define BBOX_EPS 0.0001f
 
 void readOBJ(const std::string& filename, std::vector<Tri>& triangles, glm::vec3 scale, glm::vec3 trans) {
     std::ifstream file(filename);
