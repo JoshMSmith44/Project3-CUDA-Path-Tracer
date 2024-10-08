@@ -127,10 +127,7 @@ In both tests, the optimal runtime is achieved with the approximate leaf size pa
 
 Visualizing terminal bbox sizes for incremental BVH Depths for Teddy. We can see they get progressively smaller. However, they overlap due to the triangles, which are grouped by midpoint, having a min/max span.
 
-<img src="img/teddyBVH0.png" alt="Description" width="140"/> 
-<img src="img/teddyBVH1.png" alt="Description" width="140"/>
-<img src="img/teddyBVH2.png" alt="Description" width="140"/> 
-<img src="img/teddyBVH3.png" alt="Description" width="140"/>
+<img src="img/teddyBVH0.png" alt="Description" width="140"/> <img src="img/teddyBVH1.png" alt="Description" width="140"/> <img src="img/teddyBVH2.png" alt="Description" width="140"/> <img src="img/teddyBVH3.png" alt="Description" width="140"/>
 
 
 ----
