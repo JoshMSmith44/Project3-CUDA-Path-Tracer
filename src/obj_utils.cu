@@ -92,7 +92,8 @@ void readOBJ(const std::string& filename, std::vector<Tri>& triangles, glm::vec3
         newTri.midpoint = (newTri.vertices[0] + newTri.vertices[1] + newTri.vertices[2]) / 3.0f;
         //print midpoint 
         //std::cout << newTri.midpoint.x << " " << newTri.midpoint.y << " " << newTri.midpoint.z << std::endl;
-        newTri.color = glm::vec3(0.8f, 0.4f, 0.0f);
+        newTri.color = glm::vec3(0.6f, 0.6f, 0.99f);
+        //newTri.color = glm::vec3(0.4f, 0.2f, 0.1f);
         newTri.emittance = 0.0f;
         newTri.reflectivity = 0.0f;
         newTri.roughness = 0.0f;
@@ -131,10 +132,11 @@ __device__ FloatInt getTriIntersectionLinear(Ray r, Tri* triangles, int numTrian
     for(int i = 0; i < numTriangles; i++){
         Tri tri = triangles[i];
         glm::vec3 hitPosition;
+        float t;
         bool intersected = glm::intersectRayTriangle(r.origin, r.direction, tri.vertices[0], tri.vertices[1], tri.vertices[2], hitPosition);
 
         if(intersected){
-            float t = glm::length(hitPosition - r.origin);
+            float t = hitPosition[2];//glm::length(hitPosition - r.origin);
             if(t < t_min && t > 0.0f){
                 t_min = t;
                 min_intersect_index = i;
@@ -177,6 +179,16 @@ __device__ FloatInt getTriIntersectionOctTree(Ray r, Tri* triangles, int numTria
                 //leaf, test all triangles with linear
                 FloatInt leaf_hit = getTriIntersectionLinear(r, triangles + currRegion.start_tri_ind,
                                                              currRegion.length, t_min);
+                /*
+                //Render bounding box hack
+                int a = currRegion.start_tri_ind % 3;
+                int b = currRegion.start_tri_ind % 5;
+                int c = currRegion.start_tri_ind % 7;
+                FloatInt leaf_hit = {t, currRegion.start_tri_ind};
+                triangles[currRegion.start_tri_ind].color = glm::vec3((float)a / 7.0f, (float)b / 11.0f, (float)c / 17.0f);
+                //end render hack
+                */
+
                 if (leaf_hit.i != -1 && leaf_hit.f < t_min) {
                     t_min = leaf_hit.f;
                     t_min_index = leaf_hit.i + currRegion.start_tri_ind;
