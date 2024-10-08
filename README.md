@@ -15,7 +15,7 @@ CUDA Path Tracer
 
 **Project Description**
 
-In this project, I created a CUDA pathtracer to render 3D scenes. This includes toggleable material sorting. I incorporated some cool features I am especially proud of. Specifically, Russian Roulette termination, support for obj meshes, and an Octree based sample for mesh intersections.
+In this project, I created a CUDA pathtracer to render 3D scenes. This includes toggleable material sorting, stream-compation ray termination, and ray-jitter anti-aliasing. I incorporated some cool features I am especially proud of. Specifically, Russian Roulette termination, support for obj meshes, and an Bounding-Volume Hierarchy based sampling for mesh intersections.
 
 **Items Completed**:
   * Standard Implementation
