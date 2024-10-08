@@ -71,7 +71,7 @@ Material Sorting:
 * Russian Roulette Termination is implemented with linear falloff
 * Given a falloff threshold x, the probability of a rays termination is:
 $p = \frac{x - ||\text{color}||}{x}$. 
-* If a ray is terminated, its color is set to 0. If a ray is not terminated, its color is multiplied by $\frac{1}{1-p}$. This yields the same expectancy of pixel color while reducing the number ray bounces needed for a given pixel sampling iteration on average. However, it will increase sampling variance an may require more iterations to yield a stable pixel color.
+* If a ray is terminated, its color is set to 0. If a ray is not terminated, its color is multiplied by $\frac{1}{1-p}$. This yields the same expectancy of pixel color while reducing the number of ray bounces needed for a given pixel sampling iteration on average. However, it will increase sampling variance and may require more iterations to yield a stable pixel color.
 
   <img src="img/RRT.png" alt="Description" width="600"/> 
 
