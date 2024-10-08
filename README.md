@@ -90,7 +90,7 @@ $p = \frac{x - ||\text{color}||}{x}$.
   * For simplicity, each triangle is stored as a self-contained struct with vertex information. This is relatively memory-inefficient but allows for a simpler implementation for intersection check and avoids the extra index->vertex memory lookup relative to face/vertex seperate storage methods.
   * Supports both diffuse and reflective surfaces ex:
 
-  <img src="img/final_dragon_reflective.png" alt="Description" width="600"/> 
+  <img src="img/final_dragon_reflective.png" alt="Description" width="800"/> 
   <img src="img/teddy_cornell.png" alt="Description" width="800"/>
 
   * In this implementation, the face normal is taken directly as the reflection normal. A possible improvement would be calculating smooth reflection. Even with finite normals, the bary-centric coordinates from triangle intersection can be used to interpolate over vertex or neighbor-face normals yielding smooth reflection. The reflective surface roughness can be seen in the purple dragon render, as the reflective spots often correspond with single triangles. This results in the "glittery" appearance which is slightly inaccurate, albeit I think it looks pretty cool.
