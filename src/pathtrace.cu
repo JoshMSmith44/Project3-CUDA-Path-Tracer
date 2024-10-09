@@ -21,15 +21,15 @@
 #define ERRORCHECK 1
 
 // whether to sort the materials
-#define SORTMATERIAL 0
+#define SORTMATERIAL 1
 #define RUSSIANROULETTE 0
-#define RUSSIANROULETTE_THRESHOLD 0.1f
+#define RUSSIANROULETTE_THRESHOLD 0.6f
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
 
 #define OCTREESEARCH 1
-#define APPROXOCTREELEAFSIZE 10
+#define APPROXOCTREELEAFSIZE 1
 
 void checkCUDAErrorFn(const char* msg, const char* file, int line)
 {
@@ -132,7 +132,6 @@ void pathtraceInit(Scene* scene)
     cudaMemcpy(dev_triangle_set, scene->triangles.data(), scene->triangles.size() * sizeof(Tri), cudaMemcpyHostToDevice);
 
     #if OCTREESEARCH == 1
-    cout << "sizeof triangle set: num, tot_size: " << num_triangles << num_triangles * sizeof(Tri) << endl;
     float numleafrough = ((float)(num_triangles)) / APPROXOCTREELEAFSIZE;
     int tree_depth = floor((int)(log2(numleafrough) / 3.0f));
     if(tree_depth < 0){
@@ -157,6 +156,7 @@ void pathtraceInit(Scene* scene)
         std::cout << "    length: " << region.length << endl;
     }
     #endif
+    cout << "Num Triangles: " << num_triangles << " sizeof triangle set: " << num_triangles * sizeof(Tri) << endl;
 
     checkCUDAError("pathtraceInit");
 }
@@ -201,7 +201,8 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
         segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
 
         // TODO: implement antialiasing by jittering the ray
-        float random_scale = 0.01f;
+        float random_scale = 0.006f;
+        //float random_scale = 0.0f;
         glm::vec3 jitter_vec = cam.view;
         glm::vec3 view_right = glm::normalize(glm::cross(cam.view, cam.up));
         glm::vec3 view_up = glm::normalize(glm::cross(view_right, cam.view));
@@ -357,6 +358,7 @@ __global__ void shadeBSDFMaterial(
                         pathSegments[idx].color /= prob_keep;
                     } else {
                         pathSegments[idx].remainingBounces = 0;
+                        pathSegments[idx].color *= 0;
                     }
                 }
 
@@ -522,6 +524,7 @@ void pathtrace(uchar4* pbo, int frame, int iter)
 
     int num_triangles = hst_scene->triangles.size();
     bool iterationComplete = false;
+    //std::cout << "start loop" << endl;
     while (!iterationComplete)
     {
         // clean shading chunks
@@ -547,7 +550,7 @@ void pathtrace(uchar4* pbo, int frame, int iter)
         checkCUDAError("intersection check");
 
         //Sort the materials
-        #if SORTMATERIAL
+        #if SORTMATERIAL == 1
         thrust::sort_by_key(dev_intersections, dev_intersections + num_paths_remaining, dev_paths_device_ptr, mat_sort_predicate());
         #endif
 
